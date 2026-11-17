@@ -1,0 +1,7 @@
+Hej! Det här är ett litet exempel på svensk text för att prova GENI.
+En språkmodell lär sig mönster från den text som den tränas på.
+Solen går upp på morgonen och fåglarna sjunger i träden.
+Vatten är viktigt för människor, djur och växter.
+En fråga kan följas av ett svar, och tydliga exempel kan hjälpa modellen.
+Träning ändrar modellens vikter. Granska därför materialet innan du godkänner det.
+GENI sparar konversationer och träningsmaterial lokalt på datorn.
