@@ -151,7 +151,11 @@ class ChatPanel(QWidget):
         self.store.add_message(self.active_id, "user", prompt)
         self.refresh_history()
         self.send_button.setEnabled(False)
-        self.parent_window.run_task(self._generate(prompt), self._generated)
+        self.parent_window.run_task(
+            self._generate(prompt),
+            self._generated,
+            failed=lambda: self.send_button.setEnabled(True),
+        )
 
     def _generate(self, prompt: str) -> Callable[[TaskWorker], object]:
         conversation_id = self.active_id
@@ -351,6 +355,7 @@ class MainWindow(QMainWindow):
         self.checkpoint = data_directory() / "checkpoints" / "geni.pt"
         self.worker: TaskWorker | None = None
         self.worker_finished: Callable[[object], None] | None = None
+        self.worker_failed: Callable[[], None] | None = None
         self.tabs = QTabWidget()
         self.chat = ChatPanel(self.store, self.checkpoint, self)
         self.apprentice = ApprenticePanel(self.store, self.checkpoint, self)
@@ -398,12 +403,19 @@ class MainWindow(QMainWindow):
     def busy(self) -> bool:
         return self.worker is not None
 
-    def run_task(self, task: Callable[[TaskWorker], object], done: Callable[[object], None]) -> None:
+    def run_task(
+        self,
+        task: Callable[[TaskWorker], object],
+        done: Callable[[object], None],
+        *,
+        failed: Callable[[], None] | None = None,
+    ) -> None:
         if self.busy:
             return
         worker = TaskWorker(task)
         self.worker = worker
         self.worker_finished = done
+        self.worker_failed = failed
         worker.text.connect(self.chat.history.setPlainText)
         worker.progress.connect(self.on_progress)
         worker.error.connect(self.on_error)
@@ -423,11 +435,13 @@ class MainWindow(QMainWindow):
     def on_error(self, message: str) -> None:
         self.statusBar().showMessage("Åtgärden misslyckades.")
         QMessageBox.warning(self, "GENI", message)
-        self.chat.send_button.setEnabled(True)
+        if self.worker_failed:
+            self.worker_failed()
 
     def on_worker_finished(self) -> None:
         self.worker = None
         self.worker_finished = None
+        self.worker_failed = None
         self.statusBar().showMessage(f"Lokal lagring: {data_directory()}")
         self.chat.refresh_history()
         self.training.refresh()
