@@ -15,7 +15,7 @@ python -m geni
 
 In the app, import a UTF-8 text file or the included sample corpus in **Träningsstudio**, then start a short training run. In **Lärlingen**, enter a prompt and a corrected target answer, save it for review, and explicitly approve it before it can be used in training. Approval never changes model weights by itself. Chats, documents, reviewed examples, and checkpoints are stored under `%LOCALAPPDATA%\GENI`.
 
-The app can use CUDA when PyTorch detects a supported device; otherwise it runs on CPU. Keep the first training runs small, particularly on CPU. Training and generation run on a background worker so the UI stays responsive. Stopping is cooperative and occurs between training steps.
+The default setup installs a CPU-only PyTorch build for a smaller, predictable installation. To use a supported NVIDIA GPU, replace it with a matching CUDA-enabled PyTorch build from the official PyTorch installation selector before starting the app. GENI uses CUDA when available and otherwise runs on CPU. Keep the first training runs small. Training text is capped at 20 MB in this version. Training and generation run on a background worker so the UI stays responsive. Stopping is cooperative and occurs between training steps.
 
 ## Windows portable build
 
@@ -29,7 +29,7 @@ python -m unittest discover -s tests -v
 
 ## Current scope and limitations
 
-This is a small working foundation, not the complete workstation described in the original specification. The transformer uses UTF-8 bytes and a fixed context window; meaningful Swedish generation requires substantially more curated training text than the included sample. Training currently uses a simple next-byte objective and does not provide validation splits, pause/resume, growth operations, forgetting/stability evaluation, architecture visualization, model comparisons, or an installer. CPU/GPU resource estimates and live hardware telemetry are also not implemented. The project makes no claim of human-like understanding or consciousness.
+This is a small working foundation, not the complete workstation described in the original specification. The transformer uses UTF-8 bytes and a fixed context window; meaningful Swedish generation requires substantially more curated training text than the included sample. Training currently uses a simple next-byte objective on a background thread (not a separate process) and does not provide validation splits, pause/resume, growth operations, forgetting/stability evaluation, architecture visualization, model comparisons, or an installer. CPU/GPU resource estimates and live hardware telemetry are also not implemented. The project makes no claim of human-like understanding or consciousness.
 
 ## Project layout
 

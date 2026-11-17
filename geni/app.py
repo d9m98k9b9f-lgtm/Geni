@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from .engine import LocalStore, data_directory
-from .model import generate_stream, load_checkpoint, train_model, ByteTransformer
+from .model import ByteTransformer, generate_stream, load_checkpoint, train_model
 
 
 class TaskWorker(QThread):
@@ -153,11 +153,13 @@ class ChatPanel(QWidget):
         self.send_button.setEnabled(False)
         self.parent_window.run_task(self._generate(prompt), self._generated)
 
-    def _generate(self, prompt: str) -> Callable[[TaskWorker], str]:
+    def _generate(self, prompt: str) -> Callable[[TaskWorker], object]:
         conversation_id = self.active_id
 
         def task(worker: TaskWorker) -> str:
             model = load_checkpoint(self.checkpoint) if self.checkpoint.exists() else ByteTransformer()
+            if __import__("torch").cuda.is_available():
+                model = model.to("cuda")
             previous = self.store.messages(conversation_id)[-6:]
             context = "\n".join(f"{row['role']}: {row['content']}" for row in previous)
             answer = ""
@@ -181,11 +183,15 @@ class ChatPanel(QWidget):
 
 
 class ApprenticePanel(QWidget):
-    def __init__(self, store: LocalStore) -> None:
+    def __init__(self, store: LocalStore, checkpoint: Path, parent: "MainWindow") -> None:
         super().__init__()
         self.store = store
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Rättelser sparas som väntande exempel och ändrar inte modellvikterna."))
+        tabs = QTabWidget()
+        tabs.addTab(ChatPanel(store, checkpoint, parent), "Lärlingens chatt")
+        review = QWidget()
+        review_layout = QVBoxLayout(review)
+        review_layout.addWidget(QLabel("Rättelser sparas som väntande exempel och ändrar inte modellvikterna."))
         form = QFormLayout()
         self.prompt = QPlainTextEdit()
         self.answer = QPlainTextEdit()
@@ -193,15 +199,17 @@ class ApprenticePanel(QWidget):
         self.answer.setPlaceholderText("Önskat svar eller rättelse")
         form.addRow("Uppgift", self.prompt)
         form.addRow("Godkänt målsvar", self.answer)
-        layout.addLayout(form)
+        review_layout.addLayout(form)
         self.save_button = QPushButton("Spara som väntande exempel")
         self.save_button.clicked.connect(self.save_example)
-        layout.addWidget(self.save_button)
+        review_layout.addWidget(self.save_button)
         self.examples = QListWidget()
-        layout.addWidget(self.examples)
+        review_layout.addWidget(self.examples)
         self.approve_button = QPushButton("Godkänn för framtida träning")
         self.approve_button.clicked.connect(self.approve_example)
-        layout.addWidget(self.approve_button)
+        review_layout.addWidget(self.approve_button)
+        tabs.addTab(review, "Granska exempel")
+        layout.addWidget(tabs)
         self.refresh()
 
     def refresh(self) -> None:
@@ -286,6 +294,8 @@ class TrainingPanel(QWidget):
         if not path:
             return
         try:
+            if Path(path).stat().st_size > 20_000_000:
+                raise ValueError("Textfilen får vara högst 20 MB i den här versionen.")
             text = Path(path).read_text(encoding="utf-8-sig")
             self.store.add_document(Path(path).name, text)
             self.refresh()
@@ -306,6 +316,7 @@ class TrainingPanel(QWidget):
             QMessageBox.information(self, "Träningsdata saknas", "Importera en textfil eller godkänn lärlingsexempel först.")
             return
         steps, batch_size = self.steps.value(), self.batch.value()
+        self.progress.setValue(0)
         self.parent_window.run_task(
             lambda worker: train_model(
                 texts,
@@ -342,7 +353,7 @@ class MainWindow(QMainWindow):
         self.worker_finished: Callable[[object], None] | None = None
         self.tabs = QTabWidget()
         self.chat = ChatPanel(self.store, self.checkpoint, self)
-        self.apprentice = ApprenticePanel(self.store)
+        self.apprentice = ApprenticePanel(self.store, self.checkpoint, self)
         self.training = TrainingPanel(self.store, self.checkpoint, self)
         self.tabs.addTab(self._dashboard(), "Översikt")
         self.tabs.addTab(self.chat, "AI-chatt")
@@ -365,6 +376,7 @@ class MainWindow(QMainWindow):
         theme = QComboBox()
         theme.addItems(["Mörkt tema", "Ljust tema"])
         theme.currentIndexChanged.connect(self.set_theme)
+        self.set_theme(0)
         layout.addWidget(theme)
         layout.addStretch(1)
         return widget

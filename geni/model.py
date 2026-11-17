@@ -63,13 +63,21 @@ def train_model(
     data = b"\n".join(text.encode("utf-8") for text in texts)
     if len(data) < context + 1:
         raise ValueError(f"Träningsmaterialet måste innehålla minst {context + 1} byte.")
+    if len(data) > 20_000_000:
+        raise ValueError("Träningsmaterialet får vara högst 20 MB i den här versionen.")
     if not 1 <= steps <= 100_000 or not 1 <= batch_size <= 256:
         raise ValueError("Träningsinställningarna ligger utanför tillåtna gränser.")
     if not 0 < learning_rate <= 0.1:
         raise ValueError("Inlärningshastigheten måste vara mellan 0 och 0,1.")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = ByteTransformer(context=context).to(device)
+    if checkpoint.exists():
+        model = load_checkpoint(checkpoint)
+        if model.config["context"] != context:
+            raise ValueError("Checkpointens kontextinställning skiljer sig från träningsinställningen.")
+        model.to(device)
+    else:
+        model = ByteTransformer(context=context).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
     tokens = torch.tensor(list(data), dtype=torch.long, device=device)
     history: list[float] = []
